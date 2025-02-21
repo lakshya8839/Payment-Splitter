@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Party Payment Splitter</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f8f8f8;
+            padding: 20px;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        input {
+            padding: 10px;
+            margin: 10px;
+            width: 200px;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Multi-Party Payment Splitter</h1>
+    </header>
+
+    <main>
+        <button id="connectWallet">Connect Wallet</button>
+        <p id="walletAddress">Not Connected</p>
+
+        <h2>Send Payment</h2>
+        <input type="number" id="amount" placeholder="Enter amount in ETH">
+        <button id="sendPayment">Send</button>
+
+        <h2>Transaction History</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Transaction Hash</th>
+                    <th>Amount (ETH)</th>
+                </tr>
+            </thead>
+            <tbody id="transactions"></tbody>
+        </table>
+    </main>
+
+    <script>
+        const contractAddress = "0xB22c6171d0ca48AF79e8b19d4F14F835EF7bF40b"; // Your deployed contract address
+        const contractABI = [
+            {
+                "inputs": [],
+                "name": "distribute",
+                "outputs": [],
+                "stateMutability": "payable",
+                "type": "function"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    { "indexed": true, "internalType": "address", "name": "sender", "type": "address" },
+                    { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+                ],
+                "name": "PaymentReceived",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    { "indexed": false, "internalType": "uint256", "name": "totalAmount", "type": "uint256" }
+                ],
+                "name": "PaymentDistributed",
+                "type": "event"
+            }
+        ];
+
+        let web3;
+        let contract;
+        let userAccount;
+
+        async function connectWallet() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                await window.ethereum.request({ method: "eth_requestAccounts" });
+                const accounts = await web3.eth.getAccounts();
+                userAccount = accounts[0];
+                document.getElementById("walletAddress").innerText = `Connected: ${userAccount}`;
+                contract = new web3.eth.Contract(contractABI, contractAddress);
+                fetchTransactions();
+            } else {
+                alert("Please install MetaMask.");
+            }
+        }
+
+        async function sendPayment() {
+            if (!userAccount) {
+                alert("Connect wallet first!");
+                return;
+            }
+
+            const amount = document.getElementById("amount").value;
+            if (!amount) {
+                alert("Enter an amount!");
+                return;
+            }
+
+            await contract.methods.distribute().send({
+                from: userAccount,
+                value: web3.utils.toWei(amount, "ether"),
+            });
+
+            alert("Payment Sent!");
+            fetchTransactions();
+        }
+
+        async function fetchTransactions() {
+            const latestBlock = await web3.eth.getBlockNumber();
+            const events = await contract.getPastEvents("PaymentReceived", {
+                fromBlock: latestBlock - 1000,
+                toBlock: "latest"
+            });
+
+            const tableBody = document.getElementById("transactions");
+            tableBody.innerHTML = "";
+
+            events.forEach(event => {
+                const row = `<tr>
+                    <td>${event.transactionHash}</td>
+                    <td>${web3.utils.fromWei(event.returnValues.amount, "ether")} ETH</td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+        }
+
+        document.getElementById("connectWallet").addEventListener("click", connectWallet);
+        document.getElementById("sendPayment").addEventListener("click", sendPayment);
+    </script>
+</body>
+</html>
